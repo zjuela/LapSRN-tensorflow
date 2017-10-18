@@ -173,7 +173,7 @@ def test(file):
         ###========================== RESTORE G =============================###
         sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
         tl.layers.initialize_global_variables(sess)
-        tl.files.load_and_assign_npz(sess=sess, name=checkpoint_dir+'/g_train.npz', network=net_g)
+        tl.files.load_and_assign_npz(sess=sess, name=checkpoint_dir+'/params_train.npz', network=net_g)
 
         ###======================= TEST =============================###
         start_time = time.time()
@@ -181,7 +181,6 @@ def test(file):
         print("took: %4.4fs" % (time.time() - start_time))
     
         tl.files.exists_or_mkdir(save_dir)
-        print("[*] save images")
         tl.vis.save_image(truncate_imgs_fn(out[0,:,:,:]), save_dir+'/test_out.png')
         tl.vis.save_image(input_image, save_dir+'/test_input.png')
 
