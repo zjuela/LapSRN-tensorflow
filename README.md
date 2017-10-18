@@ -3,6 +3,9 @@
 This is a Tensorflow implementation using TensorLayer.
 Original paper and implementation using MatConNet can be found on their [project webpage](http://vllab1.ucmerced.edu/~wlai24/LapSRN/).
 
+### Environment
+The implementation is tested using python 3.6 and cuda 8.0.
+
 ### Download repository:
 
     $ git clone https://github.com/zjuela/LapSRN-tensorflow.git
