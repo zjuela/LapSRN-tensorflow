@@ -24,12 +24,13 @@ def LapSRNSingleLevel(net_image, net_feature, reuse=False):
             net_tmp = PReluLayer(net_tmp, name='prelu_D%s'%(d))
             net_tmp = Conv2dLayer(net_tmp,shape=[3,3,64,64],strides=[1,1,1,1],
                         name='conv_D%s'%(d), W_init=tf.contrib.layers.xavier_initializer())
-                # recursive_scope.reuse_variables()
-                # for r in range(1,config.model.recursive_depth):
-                #     # recursive block
-                #     for d in range(config.model.resblock_depth):
-                #         net_tmp = Conv2dLayer(net_tmp,shape=[3,3,64,64],strides=[1,1,1,1],
-                #                             act=lrelu,name='Level%s_D%s_conv'%(level,d))
+                
+        # for r in range(1,config.model.recursive_depth):
+        #     for d in range(config.model.resblock_depth):
+        #         net_tmp = PReluLayer(net_tmp, name='prelu_R%s_D%s'%(r,d))
+        #         net_tmp = Conv2dLayer(net_tmp,shape=[3,3,64,64],strides=[1,1,1,1],
+        #                 name='conv_R%s_D%s'%(r,d), W_init=tf.contrib.layers.xavier_initializer())
+
         net_feature = ElementwiseLayer(layer=[net_feature,net_tmp],combine_fn=tf.add,name='add_feature')
 
         net_feature = PReluLayer(net_feature, name='prelu_feature')
@@ -39,7 +40,7 @@ def LapSRNSingleLevel(net_image, net_feature, reuse=False):
                         name='subpixel_feature')
 
         # add image back
-        gradient_level = Conv2dLayer(net_feature,shape=[3,3,64,3],strides=[1,1,1,1],
+        gradient_level = Conv2dLayer(net_feature,shape=[3,3,64,3],strides=[1,1,1,1],act=lrelu,
                         name='grad', W_init=tf.contrib.layers.xavier_initializer())
         net_image = Conv2dLayer(net_image,shape=[3,3,3,12],strides=[1,1,1,1],
                         name='upconv_image', W_init=tf.contrib.layers.xavier_initializer())
@@ -66,10 +67,7 @@ def LapSRN(inputs, is_train=False, reuse=False):
                         name='init_conv')
         net_image = inputs_level
 
-        # net_image, net_feature, net_gradient = LapSRNSingleLevel(net_image, net_feature, reuse=reuse)
-        # for level in range(1,n_level):
-            # net_image, net_feature, net_gradient = LapSRNSingleLevel(net_image, net_feature, reuse=True)
-
+        # 2X for each level 
         net_image1, net_feature1, net_gradient1 = LapSRNSingleLevel(net_image, net_feature, reuse=reuse)
         net_image2, net_feature2, net_gradient2 = LapSRNSingleLevel(net_image1, net_feature1, reuse=True)
 

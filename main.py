@@ -18,6 +18,17 @@ ni = int(np.sqrt(config.train.batch_size))
 
 
 
+def compute_charbonnier_loss(tensor1, tensor2, is_mean=True):
+    epsilon = 1e-6
+    if is_mean:
+        loss = tf.reduce_mean(tf.reduce_mean(tf.sqrt(tf.square(tf.subtract(tensor1,tensor2))+epsilon), [1, 2, 3]))
+    else:
+        loss = tf.reduce_mean(tf.reduce_sum(tf.sqrt(tf.square(tf.subtract(tensor1,tensor2))+epsilon), [1, 2, 3]))
+
+    return loss
+
+
+
 def load_file_list():
     train_hr_file_list = []
     train_lr_file_list = []
@@ -96,15 +107,15 @@ def train():
     net_image_test, net_grad_test, _, _ = LapSRN(t_image, is_train=False, reuse=True)
 
     ###========================== DEFINE TRAIN OPS ==========================###
-    mse_loss2 = tl.cost.mean_squared_error(net_image2.outputs, t_target_image, is_mean=True)
-    mse_loss1 = tl.cost.mean_squared_error(net_image1.outputs, t_target_image_down, is_mean=True)
-    mse_loss  = mse_loss1 + mse_loss2 * 4
-    g_vars    = tl.layers.get_variables_with_name('LapSRN', True, True)
+    loss2   = compute_charbonnier_loss(net_image2.outputs, t_target_image, is_mean=True)
+    loss1   = compute_charbonnier_loss(net_image1.outputs, t_target_image_down, is_mean=True)
+    g_loss  = loss1 + loss2 * 4
+    g_vars  = tl.layers.get_variables_with_name('LapSRN', True, True)
     
     with tf.variable_scope('learning_rate'):
         lr_v = tf.Variable(config.train.lr_init, trainable=False)
 
-    g_optim = tf.train.AdamOptimizer(lr_v, beta1=config.train.beta1).minimize(mse_loss, var_list=g_vars)
+    g_optim = tf.train.AdamOptimizer(lr_v, beta1=config.train.beta1).minimize(g_loss, var_list=g_vars)
     
     ###========================== RESTORE MODEL =============================###
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=False))
@@ -114,13 +125,13 @@ def train():
     ###========================== PRE-LOAD DATA ===========================###
     train_hr_list,train_lr_list,valid_hr_list,valid_lr_list = load_file_list()
  
-    ###========================== Intermediate validation ===============================###
-    sample_ind = 53
+    ###========================== INTERMEDIATE RESULT ===============================###
+    sample_ind = 37
     sample_input_imgs,sample_output_imgs = prepare_nn_data(valid_hr_list,valid_lr_list,sample_ind)
     tl.vis.save_images(truncate_imgs_fn(sample_input_imgs),  [ni, ni], save_dir+'/train_sample_input.png')
     tl.vis.save_images(truncate_imgs_fn(sample_output_imgs), [ni, ni], save_dir+'/train_sample_output.png')
 
-    ###========================== Training ====================###
+    ###========================== TRAINING ====================###
     sess.run(tf.assign(lr_v, config.train.lr_init))
     print(" ** learning rate: %f" % config.train.lr_init)
 
@@ -133,25 +144,27 @@ def train():
             print(" ** learning rate: %f" % (lr))
 
         epoch_time = time.time()
-        total_mse_loss, n_iter = 0, 0
+        total_g_loss, n_iter = 0, 0
 
         ## load image data
         idx_list = np.random.permutation(len(train_hr_list))
         for idx_file in range(len(idx_list)):
             step_time = time.time()
             batch_input_imgs,batch_output_imgs = prepare_nn_data(train_hr_list,train_lr_list,idx_file)
-            errM, _ = sess.run([mse_loss, g_optim], {t_image: batch_input_imgs, t_target_image: batch_output_imgs})
-            total_mse_loss += errM
+            errM, _ = sess.run([g_loss, g_optim], {t_image: batch_input_imgs, t_target_image: batch_output_imgs})
+            total_g_loss += errM
             n_iter += 1
         
-        print("[*] Epoch: [%2d/%2d] time: %4.4fs, mse: %.8f" % (epoch, config.train.n_epoch, time.time() - epoch_time, total_mse_loss/n_iter))
+        print("[*] Epoch: [%2d/%2d] time: %4.4fs, loss: %.8f" % (epoch, config.train.n_epoch, time.time() - epoch_time, total_g_loss/n_iter))
 
         ## save model and evaluation on sample set
-        if (epoch != 0) and (epoch % 1 == 0):
+        if (epoch >= 0):
             tl.files.save_npz(net_image2.all_params,  name=checkpoint_dir+'/params_{}.npz'.format(tl.global_flag['mode']), sess=sess)
-            sample_out, sample_grad_out = sess.run([net_image_test.outputs,net_grad_test.outputs], {t_image: sample_input_imgs})#; print('gen sub-image:', out.shape, out.min(), out.max())
-            tl.vis.save_images(truncate_imgs_fn(sample_out), [ni, ni], save_dir+'/train_predict_%d.png' % epoch)
-            tl.vis.save_images(truncate_imgs_fn(np.abs(sample_grad_out)), [ni, ni], save_dir+'/train_grad_predict_%d.png' % epoch)
+            
+            if config.train.dump_intermediate_result is True:
+                sample_out, sample_grad_out = sess.run([net_image_test.outputs,net_grad_test.outputs], {t_image: sample_input_imgs})#; print('gen sub-image:', out.shape, out.min(), out.max())
+                tl.vis.save_images(truncate_imgs_fn(sample_out), [ni, ni], save_dir+'/train_predict_%d.png' % epoch)
+                tl.vis.save_images(truncate_imgs_fn(np.abs(sample_grad_out)), [ni, ni], save_dir+'/train_grad_predict_%d.png' % epoch)
             
 
 
